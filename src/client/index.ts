@@ -6,7 +6,7 @@
 import type { RuntimeNutritionProjection, RuntimeNutritionReport } from '../report.ts'
 import type { SideEffectLevel } from '../types.ts'
 import css from './index.module.css'
-import { buildNutritionViewModel, formatBytes, type NutritionToolRow } from './view-model.ts'
+import { buildNutritionViewModel, formatBytes, formatDuration, type NutritionToolRow } from './view-model.ts'
 
 interface ReactApi {
   createElement(type: string, props: Record<string, unknown> | null, ...children: readonly unknown[]): unknown
@@ -89,6 +89,37 @@ function effect(effect: SideEffectLevel): unknown {
   return React.createElement('span', { className: css.effect }, effect)
 }
 
+function toolState(state: NutritionToolRow['state']): unknown {
+  const stateClass = state === 'Active'
+    ? css.toolStateActive
+    : state === 'Healthy'
+      ? css.toolStateHealthy
+      : state === 'Failed'
+        ? css.toolStateFailed
+        : state === 'Discarded'
+          ? css.toolStateDiscarded
+          : css.toolStateIdle
+  return React.createElement('span', { className: classNames(css.toolState, stateClass) }, state)
+}
+
+function callResult(status: RuntimeNutritionReport['calls'][number]['status'], failureCode: RuntimeNutritionReport['calls'][number]['failureCode']): unknown {
+  const statusClass = status === 'success'
+    ? css.callResultSuccess
+    : status === 'failed'
+      ? css.callResultFailed
+      : status === 'discarded'
+        ? css.callResultDiscarded
+        : css.callResultActive
+  const label = status === 'success'
+    ? 'Success'
+    : status === 'failed'
+      ? `Failed${failureCode === undefined ? '' : ` · ${failureCode}`}`
+      : status === 'discarded'
+        ? 'Discarded'
+        : 'In progress'
+  return React.createElement('span', { className: classNames(css.callResult, statusClass) }, label)
+}
+
 function summaryStrip(view: ReturnType<typeof buildNutritionViewModel>): unknown {
   return React.createElement('div', { className: css.summaryStrip, 'aria-label': 'Runtime summary' }, [
     React.createElement('p', { className: css.summaryPrimary, key: 'primary' }, [
@@ -142,27 +173,61 @@ function toolDirectory(view: ReturnType<typeof buildNutritionViewModel>): unknow
   const includeOwner = ownerIds.size > 1
   const headers = [
     ...(includeOwner ? ['Owner'] : []),
-    ...view.toolColumns,
+    'Tool', 'State', 'Usage', 'Avg', 'P95', 'Input / Output', 'Effect',
   ]
-  const rows = view.tools.map((tool: NutritionToolRow) => [
-    ...(includeOwner ? [tool.ownerId] : []),
-    React.createElement('code', { className: css.toolName, key: `${tool.ownerId}-${tool.name}` }, tool.name),
-    formatBytes(tool.schemaBytes),
-    ...(view.state === 'idle' ? [] : [tool.calls, tool.successes, tool.failures]),
-    effect(tool.effect),
-  ])
-  const numericColumns = includeOwner
-    ? [2, ...(view.state === 'idle' ? [] : [3, 4, 5])]
-    : [1, ...(view.state === 'idle' ? [] : [2, 3, 4])]
-  return React.createElement('details', { key: 'tools' }, [
+  const gridCell = (value: unknown, key: string, extraClass?: string): unknown => React.createElement(
+    'span',
+    { className: classNames(css.toolGridCell, extraClass), key },
+    value,
+  )
+  const gridClass = includeOwner ? css.toolGridWithOwner : undefined
+  const header = React.createElement('div', { className: classNames(css.toolGrid, gridClass, css.toolGridHeader), role: 'row', key: 'header' }, headers.map((headerLabel, index) => gridCell(headerLabel, `${headerLabel}-${index}`, css.toolGridHeaderCell)))
+  const rows = view.tools.map((tool: NutritionToolRow) => {
+    const toolLabel = React.createElement('span', { className: css.toolLabel }, [
+      React.createElement('code', { className: css.toolName, key: 'name' }, tool.name),
+      React.createElement('small', { className: css.toolSchema, key: 'schema' }, `schema ${formatBytes(tool.schemaBytes)}`),
+    ])
+    const io = tool.calls === 0 ? '—' : `${formatBytes(tool.argumentBytes)} / ${formatBytes(tool.resultBytes)}`
+    const summaryCells = [
+      ...(includeOwner ? [gridCell(tool.ownerId, 'owner')] : []),
+      gridCell(toolLabel, 'tool'),
+      gridCell(toolState(tool.state), 'state'),
+      gridCell(tool.usage, 'usage', css.toolGridNumeric),
+      gridCell(formatDuration(tool.averageDurationMs, tool.timedCalls), 'average', css.toolGridNumeric),
+      gridCell(formatDuration(tool.p95DurationMs, tool.timedCalls), 'p95', css.toolGridNumeric),
+      gridCell(io, 'io', css.toolGridNumeric),
+      gridCell(effect(tool.effect), 'effect'),
+    ]
+    const recordRows = tool.records.map(call => [
+      call.ordinal,
+      call.startedAt,
+      call.durationMs === undefined ? 'In flight' : formatDuration(call.durationMs, 1),
+      formatBytes(call.argumentBytes),
+      call.resultBytes === undefined ? '—' : formatBytes(call.resultBytes),
+      callResult(call.status, call.failureCode),
+      effect(call.effect),
+    ])
+    const recordBody = recordRows.length === 0
+      ? React.createElement('div', { className: css.toolRecordsEmpty }, tool.calls === 0 ? 'No calls recorded for this tool.' : 'No retained records; the bounded call sample may have been truncated.')
+      : table(['#', 'Started', 'Duration', 'Input bytes', 'Output bytes', 'Result', 'Effect'], recordRows, [0, 2, 3, 4])
+    const recordMeta = `${tool.records.length} retained record${tool.records.length === 1 ? '' : 's'} · input/output are byte counts`
+    return React.createElement('details', { className: css.toolDisclosure, key: `${tool.ownerId}-${tool.name}` }, [
+      React.createElement('summary', { className: classNames(css.toolGrid, gridClass), key: 'summary' }, summaryCells),
+      React.createElement('div', { className: css.toolRecords, key: 'records' }, [
+        React.createElement('p', { className: css.toolRecordsMeta, key: 'meta' }, recordMeta),
+        recordBody,
+      ]),
+    ])
+  })
+  return React.createElement('details', { key: 'tools', open: true }, [
     React.createElement('summary', { key: 'summary' }, [
       'Tool directory',
       React.createElement('span', { className: css.count, key: 'count' }, String(view.tools.length)),
-      React.createElement('span', { className: css.summaryHint, key: 'hint' }, 'Full registry, shown on demand'),
+      React.createElement('span', { className: css.summaryHint, key: 'hint' }, 'Click a tool to inspect bounded call records'),
     ]),
-    React.createElement('div', { className: css.detailsBody, key: 'body' }, view.tools.length === 0
+    React.createElement('div', { className: classNames(css.detailsBody, css.toolDirectoryBody, css.toolTable), key: 'body' }, view.tools.length === 0
       ? React.createElement('div', { className: css.empty }, 'No tools observed in this window.')
-      : table(headers, rows, numericColumns)),
+      : [header, ...rows]),
   ])
 }
 
