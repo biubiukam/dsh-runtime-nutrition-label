@@ -1,0 +1,9 @@
+# The default DSH bundle layer. Installing this package through
+# `dsh plugin --profile <name> add dsh-runtime-nutrition-label` adds these
+# rows to the selected profile automatically.
+- insert:
+    - id: runtime-nutrition-label
+      name: 'dsh-runtime-nutrition-label'
+
+    - id: runtime-nutrition-label-command
+      name: 'dsh-runtime-nutrition-label/command'

@@ -1,0 +1,23 @@
+# Install the bundle first, then use this profile overlay to replace the
+# service row's complete configuration with explicit plugin attribution.
+- id: runtime-nutrition-label
+  config:
+    plugins:
+      - id: mcp-github
+        displayName: GitHub MCP
+        tools:
+          prefixes:
+            - mcp__github__
+        declared:
+          network: true
+          credentials: true
+          domains:
+            - api.github.com
+        effects:
+          - prefixes:
+              - mcp__github__create_
+              - mcp__github__merge_
+            effect: write
+
+# The bundle also mounts `dsh-runtime-nutrition-label/command`. Add a disabled
+# override for `runtime-nutrition-label-command` when the command is unwanted.

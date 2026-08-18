@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "tests/**/*.spec.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "ignoreDependencies": [
+    "@deepseek-ai/dsh-fs",
+    "@deepseek-ai/dsh-invariants",
+    "@deepseek-ai/dsh-tools"
+  ]
+}
