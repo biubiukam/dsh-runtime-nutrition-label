@@ -5,6 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import type { ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { ConfigSchema, resolveConfig } from './config.ts'
+import type { ResolvedConfig } from './config.ts'
 import { RuntimeNutritionCollector } from './collector.ts'
 import type { Config, RuntimeNutritionSnapshot } from './types.ts'
 
@@ -22,7 +23,10 @@ export class RuntimeNutritionLabelService extends Service {
   static inject = ['tools']
   static Config = ConfigSchema
 
+  private readonly config: ResolvedConfig
   private readonly collector: RuntimeNutritionCollector
+  private readonly agentCollectors = new Map<object, RuntimeNutritionCollector>()
+  private readonly actorCollectors = new WeakMap<object, RuntimeNutritionCollector>()
 
   /**
    * Create the collector and subscribe to tool and optional filesystem events.
@@ -31,26 +35,41 @@ export class RuntimeNutritionLabelService extends Service {
    */
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'runtimeNutritionLabels')
-    this.collector = new RuntimeNutritionCollector(resolveConfig(config))
+    this.config = resolveConfig(config)
+    this.collector = new RuntimeNutritionCollector(this.config)
 
     ctx.on('tools/pre-execute', async (exec, next) => {
       this.collector.begin(exec)
+      if (exec.agent !== undefined) {
+        const collector = this.collectorFor(exec.agent)
+        this.actorCollectors.set(exec, collector)
+        collector.begin(exec)
+      }
       return next()
     }, { prepend: true })
     ctx.on('tools/result', (exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>) => {
       this.collector.finish(exec as ToolExecution, result as ToolExecutionResult)
+      if (exec.agent !== undefined) {
+        this.collectorFor(exec.agent).finish(exec as ToolExecution, result as ToolExecutionResult)
+      }
     })
     ctx.on('tools/change', () => this.syncSchemas())
+    ctx.on('agent/disposed', ({ agent }) => {
+      this.agentCollectors.delete(agent)
+    })
     ctx.on('fs/write-intent', (target: FsTarget, actor: object | undefined, next) => {
       this.collector.noteWriteIntent(target, actor)
+      if (actor !== undefined) this.actorCollectors.get(actor)?.noteWriteIntent(target, actor)
       return next()
     }, { prepend: true })
     ctx.on('fs/edit-intent', (target: FsTarget, actor: object | undefined, next) => {
       this.collector.noteWriteIntent(target, actor)
+      if (actor !== undefined) this.actorCollectors.get(actor)?.noteWriteIntent(target, actor)
       return next()
     }, { prepend: true })
     ctx.on('fs/observed', (target: FsTarget, _observation, actor: object | undefined) => {
       this.collector.observeFile(target, actor)
+      if (actor !== undefined) this.actorCollectors.get(actor)?.observeFile(target, actor)
     })
     this.syncSchemas()
   }
@@ -60,10 +79,26 @@ export class RuntimeNutritionLabelService extends Service {
     return this.collector.snapshot(pluginId)
   }
 
+  /** Return an immutable snapshot for one agent's visible tool registry. */
+  snapshotFor(agent: object, pluginId?: string): RuntimeNutritionSnapshot {
+    return this.collectorFor(agent).snapshot(pluginId)
+  }
+
   /** Clear collected observations while preserving configuration. */
   reset(pluginId?: string): void {
     this.collector.reset(pluginId)
+    for (const [agent, collector] of this.agentCollectors) {
+      collector.reset(pluginId)
+      this.syncSchemasFor(agent, collector)
+    }
     this.syncSchemas()
+  }
+
+  /** Clear observations for one agent while preserving its configuration. */
+  resetFor(agent: object, pluginId?: string): void {
+    const collector = this.collectorFor(agent)
+    collector.reset(pluginId)
+    this.syncSchemasFor(agent, collector)
   }
 
   /** Resolve the configured owner for one public tool name. */
@@ -72,14 +107,29 @@ export class RuntimeNutritionLabelService extends Service {
   }
 
   private syncSchemas(): void {
+    this.syncSchemasFor(undefined, this.collector)
+    for (const [agent, collector] of this.agentCollectors) this.syncSchemasFor(agent, collector)
+  }
+
+  private syncSchemasFor(agent: object | undefined, collector: RuntimeNutritionCollector): void {
     try {
-      this.collector.syncSchemas(this.ctx.tools.schemas())
+      collector.syncSchemas(this.ctx.tools.schemas(agent))
     } catch (error: unknown) {
       this.ctx.logger.warn(
         'runtime-nutrition-label: tool schema snapshot failed: %s',
         error instanceof Error ? error.message : String(error),
       )
     }
+  }
+
+  private collectorFor(agent: object | undefined): RuntimeNutritionCollector {
+    if (agent === undefined) return this.collector
+    const existing = this.agentCollectors.get(agent)
+    if (existing !== undefined) return existing
+    const collector = new RuntimeNutritionCollector(this.config)
+    this.agentCollectors.set(agent, collector)
+    this.syncSchemasFor(agent, collector)
+    return collector
   }
 }
 

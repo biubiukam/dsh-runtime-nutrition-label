@@ -4,6 +4,7 @@
 
 ## 未发布
 
+- `/nutrition-label` 使用接收命令的 DSH agent 作用域读取 schema 和运行时观察，同时保留 root snapshot API。
 - 在 npm 发布前校验 tag 与包版本，并将预发布版本路由到对应的 npm dist-tag。
 
 ## [0.1.0] - 2026-08-18

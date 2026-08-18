@@ -21,16 +21,18 @@ npm 包同时也是 DSH bundle。`package.json` 声明 `dsh.bundle.patch`，发�
 
 1. `tools/pre-execute` 在下游策略运行前记录配置归属、参数字节数、效果分类、URL 主机名和开始时间。
 2. `tools/result` 记录成功或失败、结果字节数和耗时。
-3. `tools/change` 从完整的可见工具注册表刷新 schema 字节数。
+3. `tools/change` 从完整的可见工具注册表刷新 schema 字节数。agent 所有的采集器通过 `ctx.tools.schemas(agent)` 查询；root 采集器查询 root 注册表。
 4. `fs/write-intent` 与 `fs/edit-intent` 将目标与当前工具 actor 关联。
 5. `fs/observed` 提交读取或写入观察。只有同一目标之前存在意图时，观察才会计为写入。
-6. `snapshot()` 将私有状态 fold 为排序、有界且深度冻结的 JSON 值。
+6. `snapshot()` 将 root 状态 fold 为排序、有界且深度冻结的 JSON 值；`snapshotFor(agent)` fold 对应的 agent 状态。人工命令始终使用 invocation 中的 agent。
 
 Waterfall 监听器会在前面执行观察，并始终通过 `next()` 委派。采集器不会拒绝或改写调用。
 
 ## 归属
 
 DSH 事件暴露工具执行和 actor 关系，但不提供通用的插件拥有者身份。因此配置通过精确工具名和不重叠前缀映射到稳定标签 id。未匹配工具可以归入 `unattributed`，也可以忽略。精确效果规则优先于前缀规则。
+
+Agent 作用域和插件归属是两个独立维度：即使 profile 尚未配置明确的插件映射，agent 作用域快照仍可能包含保留的 `unattributed` 标签。
 
 ## 隐私与边界
 

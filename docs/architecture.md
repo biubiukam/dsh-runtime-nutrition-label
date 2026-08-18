@@ -21,16 +21,18 @@ The npm package also acts as a DSH bundle. `package.json` declares `dsh.bundle.p
 
 1. `tools/pre-execute` records the configured owner, argument byte count, effect classification, URL hostnames, and a start timestamp before downstream policies run.
 2. `tools/result` records success or failure, result byte count, and elapsed time.
-3. `tools/change` refreshes schema byte counts from the complete visible tool registry.
+3. `tools/change` refreshes schema byte counts from the complete visible tool registry. Agent-owned collectors query `ctx.tools.schemas(agent)`; the root collector queries the root registry.
 4. `fs/write-intent` and `fs/edit-intent` associate a target with the current tool actor.
 5. `fs/observed` commits a read or write observation. A write is counted only when an intent for the same target preceded the observation.
-6. `snapshot()` folds the private state into a sorted, bounded, deeply frozen JSON value.
+6. `snapshot()` folds the root state into a sorted, bounded, deeply frozen JSON value; `snapshotFor(agent)` folds the matching agent state. The human command always uses its invocation agent.
 
 Waterfall listeners prepend their observation and always delegate with `next()`. The collector never denies or rewrites a call.
 
 ## Attribution
 
 The DSH events expose tool execution and actor relationships, not a universal plugin-owner identity. Configuration therefore maps exact tool names and non-overlapping prefixes to stable label ids. Unmatched tools can be grouped under `unattributed` or ignored. Exact effect rules take precedence over prefix rules.
+
+Agent scope and plugin attribution are separate dimensions: an agent-scoped snapshot can still contain the reserved `unattributed` label when the profile has not configured explicit plugin mappings.
 
 ## Privacy and bounds
 

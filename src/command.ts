@@ -44,10 +44,10 @@ export function apply(ctx: Context): void {
     name: 'nutrition-label',
     description: 'Show evidence-backed runtime behavior for configured plugins',
     input: { hint: '[plugin-id]' },
-    handler: ({ rawInput }) => {
+    handler: ({ agent, rawInput }) => {
       const pluginId = rawInput.trim() || undefined
       try {
-        return { kind: 'success', text: renderSnapshotMarkdown(ctx.runtimeNutritionLabels.snapshot(pluginId)) }
+        return { kind: 'success', text: renderSnapshotMarkdown(ctx.runtimeNutritionLabels.snapshotFor(agent, pluginId)) }
       } catch (error: unknown) {
         return {
           kind: 'error',

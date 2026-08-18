@@ -84,9 +84,13 @@ The service exposes:
 ```ts
 ctx.runtimeNutritionLabels.snapshot()
 ctx.runtimeNutritionLabels.snapshot('mcp-github')
+ctx.runtimeNutritionLabels.snapshotFor(agent)
+ctx.runtimeNutritionLabels.snapshotFor(agent, 'mcp-github')
 ctx.runtimeNutritionLabels.reset()
 ctx.runtimeNutritionLabels.ownerOfTool('mcp__github__create_issue')
 ```
+
+Agent-scoped snapshots use the exact DSH agent scope for schema visibility and runtime events. The `/nutrition-label` command uses the receiving agent automatically, so tools mounted only by a Web preset appear in that agent's report instead of the root report.
 
 Snapshots are deeply frozen and have `schemaVersion: 1`. They include an ISO timestamp, a monotonic in-process `revision`, configured declarations, observed aggregates, and bounded evidence records. The service never stores raw tool arguments, raw tool results, file contents, credential values, or complete URLs.
 

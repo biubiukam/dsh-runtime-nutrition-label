@@ -15,6 +15,7 @@ declare module '@deepseek-ai/dsh-tools' {
     readonly name: string
     readonly arguments: unknown
     readonly token: symbol
+    readonly agent?: object
   }
 
   export interface ToolExecutionResult {

@@ -84,9 +84,13 @@ Bundle 默认启用独立的人工命令消费者。如果 profile 只需要采�
 ```ts
 ctx.runtimeNutritionLabels.snapshot()
 ctx.runtimeNutritionLabels.snapshot('mcp-github')
+ctx.runtimeNutritionLabels.snapshotFor(agent)
+ctx.runtimeNutritionLabels.snapshotFor(agent, 'mcp-github')
 ctx.runtimeNutritionLabels.reset()
 ctx.runtimeNutritionLabels.ownerOfTool('mcp__github__create_issue')
 ```
+
+按 agent 作用域生成的快照会使用 DSH 的真实 agent scope 查询 schema，并关联同一个 agent 的运行时事件。`/nutrition-label` 命令会自动使用接收命令的 agent，因此只挂载在 Web preset 中的工具会出现在该 agent 的报告中，而不会继续显示为空的 root 报告。
 
 快照会深度冻结，并带有 `schemaVersion: 1`。其中包括 ISO 时间戳、进程内单调递增的 `revision`、配置声明、观察聚合结果和有界证据记录。服务绝不保存原始工具参数、原始工具结果、文件内容、凭据值或完整 URL。
 

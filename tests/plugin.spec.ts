@@ -21,6 +21,37 @@ const success: ToolExecutionResult = {
 }
 
 describe('RuntimeNutritionLabelService composition', () => {
+  it('projects schemas from the command agent scope instead of the root scope', async () => {
+    const ctx = new Context()
+    const agent = { id: 'web-agent' }
+    ctx.provide('tools', {
+      schemas: (scope?: object) => scope === agent ? [schema] : [],
+    })
+    const fiber = ctx.plugin(RuntimeNutritionLabelService, {
+      plugins: [{ id: 'github', tools: { prefixes: ['mcp__github__'] } }],
+    })
+    await fiber.await()
+
+    const service = ctx.get('runtimeNutritionLabels')
+    const label = service?.snapshotFor(agent, 'github').labels[0]
+    expect(label?.observed.tools[0]).toMatchObject({ name: schema.name, schemaBytes: expect.any(Number) })
+
+    const agentExec = { ...exec, agent }
+    const admitted = await ctx.waterfall('tools/pre-execute', agentExec, async () => ({ kind: 'allow' }))
+    expect(admitted).toEqual({ kind: 'allow' })
+    ctx.emit('tools/result', agentExec, success)
+    expect(service?.snapshotFor(agent, 'github').labels[0]?.observed.tools[0]?.calls).toBe(1)
+    expect(service?.snapshot('github').labels[0]?.observed.tools[0]?.calls).toBe(1)
+
+    service?.reset('github')
+    expect(service?.snapshotFor(agent, 'github').labels[0]?.observed.tools[0]?.calls).toBe(0)
+    service?.resetFor(agent, 'github')
+    expect(service?.snapshotFor(agent, 'github').labels[0]?.observed.tools[0]?.calls).toBe(0)
+    ctx.emit('agent/disposed', { agent })
+
+    await Promise.resolve(fiber.dispose())
+  })
+
   it('loads through Cordis, observes the real event pipeline, and unregisters on disposal', async () => {
     const ctx = new Context()
     let failSchemas = false

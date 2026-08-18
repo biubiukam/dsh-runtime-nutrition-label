@@ -4,6 +4,7 @@ English | [中文](CHANGELOG.zh.md)
 
 ## Unreleased
 
+- Use the receiving DSH agent scope for `/nutrition-label` schema and runtime observations while preserving the root snapshot API.
 - Validate tag and package versions before npm publication and route prerelease versions to their matching npm dist-tag.
 
 ## [0.1.0] - 2026-08-18

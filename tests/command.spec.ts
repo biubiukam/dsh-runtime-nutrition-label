@@ -37,16 +37,17 @@ describe('runtime nutrition label command', () => {
   })
 
   it('registers the command and returns an actionable unknown-label error', () => {
-    let handler: ((invocation: { readonly rawInput: string }) => unknown) | undefined
+    let handler: ((invocation: { readonly agent: object; readonly rawInput: string }) => unknown) | undefined
+    const agent = { id: 'web-agent' }
     const context = {
       commands: {
-        register(definition: { readonly handler: (invocation: { readonly rawInput: string }) => unknown }) {
+        register(definition: { readonly handler: (invocation: { readonly agent: object; readonly rawInput: string }) => unknown }) {
           handler = definition.handler
           return () => undefined
         },
       },
       runtimeNutritionLabels: {
-        snapshot(pluginId?: string) {
+        snapshotFor(_agent: object, pluginId?: string) {
           if (pluginId === 'missing') throw new RangeError('runtime-nutrition-label: unknown label "missing"')
           return snapshot
         },
@@ -55,9 +56,9 @@ describe('runtime nutrition label command', () => {
 
     apply(context)
     expect(handler).toBeDefined()
-    const successResponse = handler?.({ rawInput: '' }) as { kind: string; text: string }
+    const successResponse = handler?.({ agent, rawInput: '' }) as { kind: string; text: string }
     expect(successResponse.kind).toBe('success')
-    const response = handler?.({ rawInput: 'missing' }) as { kind: string; text: string }
+    const response = handler?.({ agent, rawInput: 'missing' }) as { kind: string; text: string }
     expect(response).toEqual({
       kind: 'error',
       text: 'runtime-nutrition-label: unknown label "missing"',
