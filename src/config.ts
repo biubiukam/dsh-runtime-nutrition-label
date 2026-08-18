@@ -12,6 +12,7 @@ import type {
 } from './types.ts'
 
 const DEFAULT_EVIDENCE_LIMIT = 100
+const DEFAULT_CALL_SAMPLE_LIMIT = 100
 const DEFAULT_FILE_SAMPLE_LIMIT = 20
 const DEFAULT_DOMAIN_SAMPLE_LIMIT = 20
 const DEFAULT_ARGUMENT_SCAN_MAX_DEPTH = 8
@@ -49,6 +50,7 @@ export const ConfigSchema: z<Config> = z.object({
   plugins: z.array(pluginSchema).default([]),
   includeUnattributed: z.boolean().default(true),
   evidenceLimit: z.number().step(1).min(1).default(DEFAULT_EVIDENCE_LIMIT),
+  callSampleLimit: z.number().step(1).min(1).default(DEFAULT_CALL_SAMPLE_LIMIT),
   fileSampleLimit: z.number().step(1).min(0).default(DEFAULT_FILE_SAMPLE_LIMIT),
   domainSampleLimit: z.number().step(1).min(0).default(DEFAULT_DOMAIN_SAMPLE_LIMIT),
   pathDisplay: z.union(['omit', 'basename', 'full'] as const).default('basename'),
@@ -68,6 +70,7 @@ export interface ResolvedConfig {
   readonly plugins: readonly ResolvedPluginConfig[]
   readonly includeUnattributed: boolean
   readonly evidenceLimit: number
+  readonly callSampleLimit: number
   readonly fileSampleLimit: number
   readonly domainSampleLimit: number
   readonly pathDisplay: PathDisplayMode
@@ -199,6 +202,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     plugins,
     includeUnattributed,
     evidenceLimit: positiveInteger('evidenceLimit', config.evidenceLimit ?? DEFAULT_EVIDENCE_LIMIT),
+    callSampleLimit: positiveInteger('callSampleLimit', config.callSampleLimit ?? DEFAULT_CALL_SAMPLE_LIMIT),
     fileSampleLimit: nonNegativeInteger('fileSampleLimit', config.fileSampleLimit ?? DEFAULT_FILE_SAMPLE_LIMIT),
     domainSampleLimit: nonNegativeInteger('domainSampleLimit', config.domainSampleLimit ?? DEFAULT_DOMAIN_SAMPLE_LIMIT),
     pathDisplay: config.pathDisplay ?? 'basename',

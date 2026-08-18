@@ -1,7 +1,11 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
-    "tests/**/*.spec.ts"
+    "tests/**/*.spec.ts",
+    "src/index.ts",
+    "src/command.ts",
+    "src/invariant.ts",
+    "src/client/index.ts"
   ],
   "project": [
     "src/**/*.ts",
@@ -10,6 +14,8 @@
   "ignoreDependencies": [
     "@deepseek-ai/dsh-fs",
     "@deepseek-ai/dsh-invariants",
-    "@deepseek-ai/dsh-tools"
+    "@deepseek-ai/dsh-tools",
+    "@deepseek-ai/dsh-session",
+    "react"
   ]
 }

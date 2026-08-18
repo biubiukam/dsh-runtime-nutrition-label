@@ -9,8 +9,8 @@ const result = (isError = false): ToolExecutionResult => ({
   content: [{ type: 'text', text: isError ? 'failed' : 'ok' }],
 })
 
-function execution(name: string, argumentsValue: unknown, token = Symbol(name)): ToolExecution {
-  return { name, arguments: argumentsValue, token }
+function execution(name: string, argumentsValue: unknown, token = Symbol(name), ids: { callId?: string; rootCallId?: string } = {}): ToolExecution {
+  return { name, arguments: argumentsValue, token, ...ids }
 }
 
 function target(displayPath: string, targetKey = displayPath): FsTarget {
@@ -20,6 +20,7 @@ function target(displayPath: string, targetKey = displayPath): FsTarget {
 function setup(options: {
   pathDisplay?: 'omit' | 'basename' | 'full'
   evidenceLimit?: number
+  callSampleLimit?: number
   fileSampleLimit?: number
   domainSampleLimit?: number
   argumentScanMaxDepth?: number
@@ -67,6 +68,32 @@ describe('RuntimeNutritionCollector', () => {
     })
     expect(metric?.argumentBytes).toBeGreaterThan(0)
     expect(metric?.resultBytes).toBeGreaterThan(0)
+  })
+
+  it('publishes a bounded safe call ledger without raw payloads', () => {
+    const { collector, advance } = setup({ callSampleLimit: 1 })
+    const first = execution('mcp__github__list', { secret: 'do not retain' }, Symbol('first'), { callId: 'call-1', rootCallId: 'root-1' })
+    collector.begin(first)
+    advance(25)
+    collector.finish(first, result(true))
+    const second = execution('mcp__github__list', { secret: 'also do not retain' })
+    collector.begin(second)
+    collector.finish(second, result())
+
+    const report = collector.report('github', 'cmd-1', 'receiving agent')
+    expect(report.calls).toHaveLength(1)
+    expect(report.calls[0]).toMatchObject({
+      ordinal: 1,
+      callId: 'call-1',
+      rootCallId: 'root-1',
+      status: 'failed',
+      durationMs: 25,
+      argumentBytes: expect.any(Number),
+      resultBytes: expect.any(Number),
+      failureCode: 'tool-error',
+    })
+    expect(report.truncation.calls).toBe(true)
+    expect(JSON.stringify(report)).not.toContain('do not retain')
   })
 
   it('attributes schemas, side effects, and nested URL hostnames without retaining raw values', () => {
@@ -142,6 +169,7 @@ describe('RuntimeNutritionCollector', () => {
     expect(label?.observed.filesystem.samples).toEqual([])
     expect(label?.evidence).toHaveLength(1)
     expect(label?.evidence[0]?.summary).toContain('succeeded')
+    expect(collector.report('github', 'cmd-evidence', 'receiving agent').truncation.evidence).toBe(true)
   })
 
   it('returns deeply immutable snapshots and resets only observations', () => {

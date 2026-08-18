@@ -56,6 +56,8 @@ export interface Config {
   readonly includeUnattributed?: boolean
   /** Maximum evidence records retained per label. */
   readonly evidenceLimit?: number
+  /** Maximum single-call trace records retained per collector window. */
+  readonly callSampleLimit?: number
   /** Maximum representative file paths retained per label. */
   readonly fileSampleLimit?: number
   /** Maximum representative domains retained per label. */

@@ -1,20 +1,10 @@
-import { defineConfig } from 'tsdown'
+import { clientBundle } from '../packages/client/tsdown.client.ts'
 
-export default defineConfig({
-  entry: [
-    'src/index.ts',
-    'src/command.ts',
-    'src/invariant.ts',
-    'src/types.ts',
-  ],
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'node',
-  target: 'es2024',
-  fixedExtension: false,
-  dts: false,
-  clean: true,
-  deps: {
-    neverBundle: [/^@deepseek-ai\//u],
-  },
-})
+/** Host and Web faces use the same package metadata; the parent Harness preset supplies the loader wrapper. */
+export default clientBundle('dsh-runtime-nutrition-label', [
+  'src/index.ts',
+  'src/command.ts',
+  'src/invariant.ts',
+  'src/types.ts',
+  'src/report.ts',
+])

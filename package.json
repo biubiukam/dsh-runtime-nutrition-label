@@ -36,6 +36,14 @@
       "types": "./lib/types/command.d.ts",
       "default": "./lib/command.js"
     },
+    "./report": {
+      "types": "./lib/types/report.d.ts",
+      "default": "./lib/report.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
     "./invariant": {
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
@@ -62,11 +70,20 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    },
     "runtimePeers": {
       "@deepseek-ai/dsh-tools": ">=0.0.1-rc.1 <0.2.0",
       "@deepseek-ai/dsh-fs": ">=0.0.1-rc.1 <0.2.0",
       "@deepseek-ai/dsh-commands": ">=0.0.1-rc.1 <0.2.0",
-      "@deepseek-ai/dsh-invariants": ">=0.0.1-rc.1 <0.2.0"
+      "@deepseek-ai/dsh-invariants": ">=0.0.1-rc.1 <0.2.0",
+      "@deepseek-ai/dsh-session": ">=0.0.1-rc.1 <0.2.0",
+      "@deepseek-ai/dsh-session-projection": ">=0.0.1-rc.1 <0.2.0"
     }
   },
   "scripts": {

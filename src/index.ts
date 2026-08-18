@@ -7,14 +7,32 @@ import type { ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { ConfigSchema, resolveConfig } from './config.ts'
 import type { ResolvedConfig } from './config.ts'
 import { RuntimeNutritionCollector } from './collector.ts'
+import { applyRuntimeNutritionProjection, type RuntimeNutritionReport } from './report.ts'
 import type { Config, RuntimeNutritionSnapshot } from './types.ts'
 
 export type * from './types.ts'
+export type { RuntimeCallTrace, RuntimeNutritionProjection, RuntimeNutritionReport } from './report.ts'
 export { ConfigSchema as Config }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     runtimeNutritionLabels: RuntimeNutritionLabelService
+  }
+}
+
+/** Public type augmentations consumed by the Host projection driver and Web client. */
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    'runtime-nutrition-label/report': {
+      readonly commandId: string
+      readonly report: import('./report.ts').RuntimeNutritionReport
+    }
+  }
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    runtimeNutritionLabel: import('./report.ts').RuntimeNutritionProjection
   }
 }
 
@@ -37,6 +55,23 @@ export class RuntimeNutritionLabelService extends Service {
     super(ctx, 'runtimeNutritionLabels')
     this.config = resolveConfig(config)
     this.collector = new RuntimeNutritionCollector(this.config)
+
+    ctx.inject(['sessionProjections'], (projectionCtx) => {
+      const projections = projectionCtx.sessionProjections
+      if (projections === undefined) return
+      projections.register({
+        key: 'runtimeNutritionLabel',
+        schema: {
+          parse(value: unknown) {
+            return value as import('./report.ts').RuntimeNutritionProjection
+          },
+        },
+        init: () => ({ reports: [] }),
+        apply: (state, event) => applyRuntimeNutritionProjection(state, event),
+        view: state => state,
+        stateVersion: 1,
+      })
+    })
 
     ctx.on('tools/pre-execute', async (exec, next) => {
       this.collector.begin(exec)
@@ -82,6 +117,11 @@ export class RuntimeNutritionLabelService extends Service {
   /** Return an immutable snapshot for one agent's visible tool registry. */
   snapshotFor(agent: object, pluginId?: string): RuntimeNutritionSnapshot {
     return this.collectorFor(agent).snapshot(pluginId)
+  }
+
+  /** Return the bounded structured report used by command adapters and projections. */
+  reportFor(agent: object, commandId: string, scope: string, pluginId?: string): RuntimeNutritionReport {
+    return this.collectorFor(agent).report(pluginId, commandId, scope)
   }
 
   /** Clear collected observations while preserving configuration. */

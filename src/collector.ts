@@ -5,6 +5,7 @@ import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import type { ToolExecution, ToolExecutionResult, ToolSchema } from '@deepseek-ai/dsh-tools'
 import { effectOf, ownerOf } from './config.ts'
 import type { ResolvedConfig, ResolvedPluginConfig } from './config.ts'
+import { reportForSnapshot, type RuntimeCallTrace, type RuntimeNutritionReport } from './report.ts'
 import type {
   DeclaredCapabilities,
   FileAccessSummary,
@@ -55,11 +56,29 @@ interface LabelState {
   callsWithUrls: number
   sideEffects: MutableSideEffectSummary
   evidence: RuntimeEvidence[]
+  evidenceTruncated: boolean
 }
 
 interface StartedCall {
   readonly ownerId: string
   readonly startedAt: number
+  readonly ledgerIndex?: number
+}
+
+interface MutableCallTrace {
+  ordinal: number
+  readonly callId?: string
+  readonly rootCallId?: string
+  readonly name: string
+  readonly ownerId: string
+  readonly startedAt: string
+  finishedAt?: string
+  durationMs?: number
+  status: RuntimeCallTrace['status']
+  readonly argumentBytes: number
+  resultBytes?: number
+  readonly effect: SideEffectLevel
+  failureCode?: 'tool-error'
 }
 
 interface PendingWrite {
@@ -101,6 +120,7 @@ function labelState(plugin: ResolvedPluginConfig | undefined, now: number): Labe
     callsWithUrls: 0,
     sideEffects: emptySideEffects(),
     evidence: [],
+    evidenceTruncated: false,
   }
 }
 
@@ -156,6 +176,8 @@ export class RuntimeNutritionCollector {
   private readonly labels = new Map<string, LabelState>()
   private readonly startedCalls = new Map<symbol, StartedCall>()
   private readonly discardedCalls = new Set<symbol>()
+  private readonly callLedger: MutableCallTrace[] = []
+  private callsTruncated = false
   private actorOwners = new WeakMap<object, string>()
   private pendingWrites = new WeakMap<object, PendingWrite[]>()
   private revision = 0
@@ -177,7 +199,25 @@ export class RuntimeNutritionCollector {
     if (ownerId === undefined) return
     const state = this.requireLabel(ownerId)
     const startedAt = this.now()
-    this.startedCalls.set(exec.token, { ownerId, startedAt })
+    const ledgerIndex = this.callLedger.length < this.config.callSampleLimit
+      ? this.callLedger.push({
+          ordinal: this.callLedger.length + 1,
+          ...exec.callId === undefined ? {} : { callId: exec.callId },
+          ...exec.rootCallId === undefined ? {} : { rootCallId: exec.rootCallId },
+          name: exec.name,
+          ownerId,
+          startedAt: new Date(startedAt).toISOString(),
+          status: 'started',
+          argumentBytes: jsonBytes(exec.arguments),
+          effect: effectOf(this.config, ownerId, exec.name),
+        }) - 1
+      : undefined
+    if (ledgerIndex === undefined) this.callsTruncated = true
+    this.startedCalls.set(exec.token, {
+      ownerId,
+      startedAt,
+      ...ledgerIndex === undefined ? {} : { ledgerIndex },
+    })
     this.actorOwners.set(exec, ownerId)
     const metric = this.requireTool(state, exec.name)
     metric.argumentBytes += jsonBytes(exec.arguments)
@@ -203,6 +243,7 @@ export class RuntimeNutritionCollector {
     const ownerId = started?.ownerId ?? this.ownerOfTool(exec.name)
     if (ownerId === undefined) return
     this.startedCalls.delete(exec.token)
+    const finishedAt = this.now()
     const state = this.requireLabel(ownerId)
     const metric = this.requireTool(state, exec.name)
     metric.calls += 1
@@ -211,7 +252,17 @@ export class RuntimeNutritionCollector {
     else metric.successes += 1
     if (started !== undefined) {
       metric.timedCalls += 1
-      metric.durations.push(Math.max(0, this.now() - started.startedAt))
+      metric.durations.push(Math.max(0, finishedAt - started.startedAt))
+    }
+    if (started?.ledgerIndex !== undefined) {
+      const trace = this.callLedger[started.ledgerIndex]
+      if (trace !== undefined) {
+        trace.finishedAt = new Date(finishedAt).toISOString()
+        trace.durationMs = Math.max(0, finishedAt - started.startedAt)
+        trace.status = result.isError ? 'failed' : 'success'
+        trace.resultBytes = jsonBytes(result)
+        if (result.isError) trace.failureCode = 'tool-error'
+      }
     }
     this.evidence(state, 'observed', 'tool', `${exec.name} ${result.isError ? 'failed' : 'succeeded'}`)
     this.revision += 1
@@ -296,6 +347,22 @@ export class RuntimeNutritionCollector {
       this.startedCalls.clear()
       this.actorOwners = new WeakMap<object, string>()
       this.pendingWrites = new WeakMap<object, PendingWrite[]>()
+      this.callLedger.length = 0
+      this.callsTruncated = false
+    } else {
+      for (const [token, started] of this.startedCalls) {
+        if (started.ownerId === pluginId) {
+          this.discardedCalls.add(token)
+          this.startedCalls.delete(token)
+        }
+      }
+      const resetAt = new Date(now).toISOString()
+      for (const trace of this.callLedger) {
+        if (trace.ownerId === pluginId && trace.status === 'started') {
+          trace.status = 'discarded'
+          trace.finishedAt = resetAt
+        }
+      }
     }
     for (const id of selected) {
       const plugin = this.config.plugins.find(candidate => candidate.id === id)
@@ -338,7 +405,21 @@ export class RuntimeNutritionCollector {
     summary: string,
   ): void {
     state.evidence.push({ time: new Date(this.now()).toISOString(), source, category, summary })
-    if (state.evidence.length > this.config.evidenceLimit) state.evidence.shift()
+    if (state.evidence.length > this.config.evidenceLimit) {
+      state.evidence.shift()
+      state.evidenceTruncated = true
+    }
+  }
+
+  /** Build a bounded structured report for a command-linked presentation. */
+  report(pluginId: string | undefined, commandId: string, scope: string): RuntimeNutritionReport {
+    const snapshot = this.snapshot(pluginId)
+    const ownerIds = new Set(snapshot.labels.map(label => label.id))
+    const calls = this.callLedger
+      .filter(trace => ownerIds.has(trace.ownerId) && trace.status !== 'discarded')
+      .map(trace => Object.freeze({ ...trace }))
+    const evidenceTruncated = snapshot.labels.some(label => this.labels.get(label.id)?.evidenceTruncated === true)
+    return reportForSnapshot(snapshot, commandId, scope, calls, this.callsTruncated, evidenceTruncated)
   }
 
   private scanDomains(value: unknown): Set<string> {

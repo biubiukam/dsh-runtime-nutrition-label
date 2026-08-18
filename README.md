@@ -33,7 +33,7 @@ For a direct Cordis composition that does not use DSH profiles, install the pack
 pnpm add dsh-runtime-nutrition-label
 ```
 
-The package has a normal peer dependency on `@deepseek-ai/cordis`. DSH runtime packages are listed under the package-specific `dsh.runtimePeers` metadata because the current public DSH RC dependency graph does not publish every transitive type package required for a clean standalone install. A DSH deployment must provide compatible `@deepseek-ai/dsh-tools`, `@deepseek-ai/dsh-fs`, `@deepseek-ai/dsh-commands`, and `@deepseek-ai/dsh-invariants` implementations. The metadata can move back to ordinary peer dependencies when that public graph is complete.
+The package has a normal peer dependency on `@deepseek-ai/cordis`. DSH runtime packages are listed under the package-specific `dsh.runtimePeers` metadata because the current public DSH RC dependency graph does not publish every transitive type package required for a clean standalone install. A DSH deployment must provide compatible `@deepseek-ai/dsh-tools`, `@deepseek-ai/dsh-fs`, `@deepseek-ai/dsh-commands`, `@deepseek-ai/dsh-invariants`, `@deepseek-ai/dsh-session`, and `@deepseek-ai/dsh-session-projection` implementations when the structured Web report path is enabled. The metadata can move back to ordinary peer dependencies when that public graph is complete.
 
 ## Composition
 
@@ -75,7 +75,7 @@ See [`examples/cordis.patch.yml`](examples/cordis.patch.yml) for a complete prof
 
 `effects` are ordered rules scoped to one configured plugin. Exact names take precedence over prefixes, and an unmatched tool has effect `unknown`. The effect is a configured classification, not proof that a provider performed the operation.
 
-`evidenceLimit`, `fileSampleLimit`, `domainSampleLimit`, `argumentScanMaxDepth`, and `argumentScanMaxNodes` are validated positive or non-negative safe integers at load time. `pathDisplay` accepts `omit`, `basename`, or `full`; `omit` is the recommended default for shared reports.
+`evidenceLimit`, `callSampleLimit`, `fileSampleLimit`, `domainSampleLimit`, `argumentScanMaxDepth`, and `argumentScanMaxNodes` are validated positive or non-negative safe integers at load time. `callSampleLimit` caps the current-window tool trace; `pathDisplay` accepts `omit`, `basename`, or `full`; `omit` is the recommended default for shared reports.
 
 ## Snapshot contract
 
@@ -122,9 +122,23 @@ This package does not add a model-facing tool or prompt section. The optional `/
 
 ### Human command report
 
+`/nutrition-label` returns a summary-first report for the receiving agent. Text-only adapters receive a Unicode line-drawn table, while the Web client can render the same Host-produced report as real HTML tables through the keyed command slot. It starts with the report scope, command id, snapshot revision, generation time, and each label's observation window. Each label then shows:
+
+- a status block explaining whether tools are loaded, whether any calls were observed in the window, and whether plugin attribution is configured;
+- a runtime summary for visible tools, schema size, calls, successes, failures, filesystem activity, and observed network domains;
+- a capability table that keeps author or deployment declarations separate from runtime observations. `No runtime evidence` means this collector did not observe proof, not that the capability is impossible;
+- a tool directory with each visible tool name, schema size, calls, successes, failures, and configured effect classification;
+- a bounded current-window tool trace with call id metadata, duration, argument/result byte counts, status, effect, and a safe failure category;
+- evidence and call-ledger truncation flags so a capped report is distinguishable from a complete one;
+- attribution guidance. Unmatched tools appear as `Unattributed tools` with an explicit explanation that they are loaded but waiting for profile mapping.
+
+The command uses the receiving agent scope automatically, so the report's scope and tool directory match the agent that invoked it. The underlying snapshot JSON contract remains unchanged; the structured report is emitted as a separate log-only session event and is linked to the command result with `sourceEventSeq` when the session API is available.
+
+The Web renderer presents the report as a product label first and a debugger second. It opens with the runtime identity, compact status pills, one-sentence verdict, and a single summary line for tools, schema, calls, and failures; file and domain activity are quieter secondary facts. The declared-versus-observed capability matrix and attribution notice use flat sections rather than nested metric cards. The tool directory and current-window call trace are progressive disclosures; when the window has zero calls, the directory uses compact `Tool`, `Schema`, and `Effect` columns instead of repeating zero-valued call columns. The visual refinement does not change the Host report, Unicode fallback, snapshot schema, bounded evidence, or raw-payload retention policy.
+
 #### What the model sees
 
-None, because the command is human-facing and returns Markdown to the command adapter.
+None. The command and report event are human/debugging surfaces and do not add prompt content.
 
 #### Token effect
 
@@ -141,7 +155,7 @@ No direct model request and no cache invalidation. Runtime observation continues
 - Network evidence only covers HTTP(S) URL strings found in bounded tool arguments.
 - The package intentionally does not publish a scalar safety or trust grade.
 - The current standalone package uses `dsh.runtimePeers` until the public DSH RC dependency graph is complete.
-- The snapshot is process-local; durable session events and long-term storage are outside this package.
+- The aggregate snapshot is process-local; the optional report event is bounded and log-only, not a long-term audit archive.
 
 ## Extension points
 

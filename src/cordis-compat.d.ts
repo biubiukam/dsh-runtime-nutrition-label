@@ -11,9 +11,21 @@ declare module '@deepseek-ai/cordis' {
         readonly description: string
         readonly input?: { readonly hint: string }
         readonly handler: (invocation: {
+          readonly commandId: string
           readonly agent: object
           readonly rawInput: string
+          readonly signal?: AbortSignal
         }) => unknown
+      }): () => void
+    }
+    readonly sessionProjections?: {
+      register(definition: {
+        readonly key: 'runtimeNutritionLabel'
+        readonly schema: { parse(value: unknown): unknown }
+        readonly init: () => import('./report.ts').RuntimeNutritionProjection
+        readonly apply: (state: import('./report.ts').RuntimeNutritionProjection, event: { readonly type: string; readonly data?: unknown }) => import('./report.ts').RuntimeNutritionProjection
+        readonly view: (state: import('./report.ts').RuntimeNutritionProjection) => import('./report.ts').RuntimeNutritionProjection
+        readonly stateVersion: number
       }): () => void
     }
     readonly invariants: {

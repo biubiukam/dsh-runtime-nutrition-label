@@ -35,6 +35,7 @@ describe('RuntimeNutritionLabelService composition', () => {
     const service = ctx.get('runtimeNutritionLabels')
     const label = service?.snapshotFor(agent, 'github').labels[0]
     expect(label?.observed.tools[0]).toMatchObject({ name: schema.name, schemaBytes: expect.any(Number) })
+    expect(service?.reportFor(agent, 'cmd-1', 'receiving agent').scope).toBe('receiving agent')
 
     const agentExec = { ...exec, agent }
     const admitted = await ctx.waterfall('tools/pre-execute', agentExec, async () => ({ kind: 'allow' }))
@@ -49,6 +50,34 @@ describe('RuntimeNutritionLabelService composition', () => {
     expect(service?.snapshotFor(agent, 'github').labels[0]?.observed.tools[0]?.calls).toBe(0)
     ctx.emit('agent/disposed', { agent })
 
+    await Promise.resolve(fiber.dispose())
+  })
+
+  it('registers the optional report projection when the projection service is mounted', async () => {
+    const ctx = new Context()
+    let definition: {
+      readonly schema: { readonly parse: (value: unknown) => unknown }
+      readonly init: () => { readonly reports: readonly unknown[] }
+      readonly apply: (state: { readonly reports: readonly unknown[] }, event: { readonly type: string; readonly data?: unknown }) => { readonly reports: readonly unknown[] }
+      readonly view: (state: { readonly reports: readonly unknown[] }) => { readonly reports: readonly unknown[] }
+    } | undefined
+    ctx.provide('tools', { schemas: () => [] })
+    ctx.provide('sessionProjections', {
+      register(candidate: typeof definition) {
+        definition = candidate
+        return () => undefined
+      },
+    })
+    const fiber = ctx.plugin(RuntimeNutritionLabelService)
+    await fiber.await()
+    expect(definition).toBeDefined()
+    expect(definition?.schema?.parse({ reports: [] })).toEqual({ reports: [] })
+    const initial = definition?.init() ?? { reports: [] }
+    const projected = definition?.apply(initial, {
+      type: 'runtime-nutrition-label/report',
+      data: { report: { commandId: 'cmd-1' } },
+    }) ?? initial
+    expect(definition?.view(projected).reports).toHaveLength(1)
     await Promise.resolve(fiber.dispose())
   })
 

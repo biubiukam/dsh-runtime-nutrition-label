@@ -33,7 +33,7 @@ dsh --profile web
 pnpm add dsh-runtime-nutrition-label
 ```
 
-该包对 `@deepseek-ai/cordis` 声明普通 peer dependency。由于当前公开 DSH RC 依赖图没有发布独立安装所需的全部传递类型包，DSH runtime 包被列在包专用的 `dsh.runtimePeers` 元数据中。DSH 部署必须提供兼容的 `@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-fs`、`@deepseek-ai/dsh-commands` 和 `@deepseek-ai/dsh-invariants` 实现。公开依赖图完整后，可以将这些元数据恢复为普通 peer dependencies。
+该包对 `@deepseek-ai/cordis` 声明普通 peer dependency。由于当前公开 DSH RC 依赖图没有发布独立安装所需的全部传递类型包，DSH runtime 包被列在包专用的 `dsh.runtimePeers` 元数据中。启用结构化 Web 报告路径时，DSH 部署还必须提供兼容的 `@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-fs`、`@deepseek-ai/dsh-commands`、`@deepseek-ai/dsh-invariants`、`@deepseek-ai/dsh-session` 和 `@deepseek-ai/dsh-session-projection` 实现。公开依赖图完整后，可以将这些元数据恢复为普通 peer dependencies。
 
 ## 组合
 
@@ -75,7 +75,7 @@ Bundle 默认启用独立的人工命令消费者。如果 profile 只需要采�
 
 `effects` 是限定在一个配置插件内的有序规则。精确名称优先于前缀；没有匹配规则的工具副作用为 `unknown`。该副作用是配置的分类，不是提供方实际执行操作的证明。
 
-`evidenceLimit`、`fileSampleLimit`、`domainSampleLimit`、`argumentScanMaxDepth` 和 `argumentScanMaxNodes` 会在加载时校验为正数或非负安全整数。`pathDisplay` 接受 `omit`、`basename` 或 `full`；共享报告建议使用 `omit`。
+`evidenceLimit`、`callSampleLimit`、`fileSampleLimit`、`domainSampleLimit`、`argumentScanMaxDepth` 和 `argumentScanMaxNodes` 会在加载时校验为正数或非负安全整数。`callSampleLimit` 限制当前窗口工具轨迹长度；`pathDisplay` 接受 `omit`、`basename` 或 `full`；共享报告建议使用 `omit`。
 
 ## 快照契约
 
@@ -122,9 +122,23 @@ ctx.runtimeNutritionLabels.ownerOfTool('mcp__github__create_issue')
 
 ### 人工命令报告
 
+`/nutrition-label` 会为接收命令的 agent 返回摘要优先的报告。只支持文本的 adapter 会收到 Unicode 线框表格；Web 客户端可以通过 keyed command slot 将同一份 Host 报告渲染成真正的 HTML 表格。报告开头显示 scope、command id、snapshot revision、生成时间和每个标签的统计窗口。每个标签随后包含：
+
+- 状态区，明确工具是否已加载、当前窗口是否观察到调用，以及是否配置了插件归属；
+- 运行摘要，展示可见工具、schema 大小、调用、成功、失败、文件系统活动和观察到的网络域名；
+- 能力表，将作者或部署声明与运行时观察分开。`No runtime evidence` 表示采集器没有观察到证据，不表示该能力绝对不可能存在；
+- 工具目录，列出每个可见工具名称、schema 大小、调用次数、成功次数、失败次数和配置的副作用分类；
+- 有界的当前窗口工具轨迹，列出 call id 元数据、耗时、参数/结果字节数、状态、副作用分类和安全的失败类别；
+- 证据与调用轨迹是否达到上限的标记，使“已截断”和“当前窗口完整”可区分；
+- 归属说明。未匹配工具会显示为 `Unattributed tools`，并明确说明工具已经加载，但仍等待 profile 配置归属。
+
+命令会自动使用接收命令的 agent，因此报告的 scope 和工具目录与实际调用它的 agent 一致。底层 snapshot JSON 契约保持不变；如果 session API 可用，结构化报告会作为独立的 log-only 事件写入，并通过 `sourceEventSeq` 与命令结果关联。
+
+Web renderer 会先呈现产品标签，再提供调试细节。默认打开时显示运行时身份、紧凑状态徽章、一句话结论，以及一条只包含工具、schema、调用和失败的摘要行；文件与域名活动降为次级信息。声明与观察能力矩阵、归属提示都采用扁平区块，不再堆叠指标卡片；工具目录和当前窗口调用轨迹通过渐进展开进入。当前窗口没有调用时，工具目录使用紧凑的 `Tool`、`Schema`、`Effect` 列，不再重复大量零值调用列。这次视觉调整不会改变 Host report、Unicode fallback、snapshot schema、有界证据或原始 payload 保留策略。
+
 #### 模型看到的内容
 
-没有，因为该命令面向人，并向命令适配器返回 Markdown。
+没有。命令和报告事件都只面向人工调试，不会增加 prompt 内容。
 
 #### Token 影响
 
@@ -141,7 +155,7 @@ ctx.runtimeNutritionLabels.ownerOfTool('mcp__github__create_issue')
 - 网络证据只覆盖有界工具参数中发现的 HTTP(S) URL 字符串。
 - 该包有意不发布单一安全或信任总分。
 - 在公开 DSH RC 依赖图完整前，独立包使用 `dsh.runtimePeers`。
-- 快照只存在于进程内；持久化 session 事件和长期存储不属于本包。
+- 聚合 snapshot 保持进程内；可选的报告事件是有界的 log-only 记录，不是长期审计归档。
 
 ## 扩展点
 

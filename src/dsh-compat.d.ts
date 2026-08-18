@@ -16,12 +16,42 @@ declare module '@deepseek-ai/dsh-tools' {
     readonly arguments: unknown
     readonly token: symbol
     readonly agent?: object
+    readonly callId?: string
+    readonly rootCallId?: string
   }
 
   export interface ToolExecutionResult {
     readonly isError: boolean
     readonly value?: unknown
     readonly content?: unknown
+  }
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    'runtime-nutrition-label/report': {
+      readonly commandId: string
+      readonly report: import('./report.ts').RuntimeNutritionReport
+    }
+  }
+
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    runtimeNutritionLabel: import('./report.ts').RuntimeNutritionProjection
+  }
+}
+
+declare module '@deepseek-ai/dsh-session' {
+  interface Session {
+    append<T extends keyof import('@deepseek-ai/dsh-session/types').SessionEventMap>(
+      type: T,
+      data: import('@deepseek-ai/dsh-session/types').SessionEventMap[T],
+      ...opts: T extends 'user/message' | 'assistant/message' | 'tool/result'
+        ? [opts: unknown]
+        : [],
+    ): { readonly seq: number }
   }
 }
 
