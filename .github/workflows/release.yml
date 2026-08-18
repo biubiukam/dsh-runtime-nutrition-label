@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing tag to publish, for example v0.1.0-alpha.0'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -19,6 +24,8 @@ jobs:
     environment: npm
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: pnpm/action-setup@v4
         with:
           version: 11.7.0
@@ -27,8 +34,49 @@ jobs:
           node-version: 22.19.0
           registry-url: https://registry.npmjs.org
           cache: pnpm
+      - name: Resolve and validate release version
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${RELEASE_TAG}"
+          if [[ "${tag}" != v* ]]; then
+            echo "Release ref must start with v: ${tag}" >&2
+            exit 1
+          fi
+
+          version="${tag#v}"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "Release ref is not a semantic version tag: ${tag}" >&2
+            exit 1
+          fi
+
+          package_version="$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version)")"
+          if [[ "${package_version}" != "${version}" ]]; then
+            echo "Tag ${tag} does not match package.json version ${package_version}" >&2
+            exit 1
+          fi
+
+          npm_tag=latest
+          if [[ "${version}" == *-* ]]; then
+            npm_tag="${version#*-}"
+            npm_tag="${npm_tag%%.*}"
+            if [[ ! "${npm_tag}" =~ ^[A-Za-z][A-Za-z0-9-]*$ ]]; then
+              echo "Cannot derive a valid npm dist-tag from ${version}" >&2
+              exit 1
+            fi
+          fi
+
+          {
+            echo "version=${version}"
+            echo "npm_tag=${npm_tag}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Publishing ${package_version} with npm dist-tag ${npm_tag}."
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      - run: pnpm publish --provenance --access public --no-git-checks
+      - run: pnpm publish --provenance --access public --tag "${{ steps.release.outputs.npm_tag }}" --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -2,6 +2,10 @@
 
 English | [中文](CHANGELOG.zh.md)
 
+## Unreleased
+
+- Validate tag and package versions before npm publication and route prerelease versions to their matching npm dist-tag.
+
 ## [0.1.0] - 2026-08-18
 
 ### Added

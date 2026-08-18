@@ -18,6 +18,22 @@ CI=1 pnpm check
 
 The supported Node versions are listed in `.node-version` and `package.json`. The repository uses pnpm, TypeScript, Vitest, tsdown, publint, Knip, and `oxlint` with type-aware checks.
 
+## Releases
+
+The GitHub Actions release workflow publishes only an existing `v<semver>` tag. It verifies that the tag version matches `package.json`, runs `pnpm check`, and publishes stable versions under the `latest` npm dist-tag. A prerelease uses the first identifier as its dist-tag, so `v0.1.0-alpha.0` publishes `0.1.0-alpha.0` under `alpha`.
+
+To publish the first alpha for version `0.1.0`, update the package version, commit it, and push the commit and tag:
+
+```sh
+npm version 0.1.0-alpha.0 --no-git-tag-version
+git add package.json
+git commit -m "Release v0.1.0-alpha.0"
+git tag v0.1.0-alpha.0
+git push origin master v0.1.0-alpha.0
+```
+
+For a later alpha in the same prerelease line, use the next explicit version such as `npm version 0.1.0-alpha.1 --no-git-tag-version`. The workflow also supports manual dispatch when you provide an existing release tag; do not reuse a published npm version or tag.
+
 ## Change requirements
 
 - Add or update tests for behavior changes.

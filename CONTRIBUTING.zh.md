@@ -18,6 +18,22 @@ CI=1 pnpm check
 
 支持的 Node 版本列在 `.node-version` 和 `package.json` 中。仓库使用 pnpm、TypeScript、Vitest、tsdown、publint、Knip 以及带类型感知检查的 `oxlint`。
 
+## 发布
+
+GitHub Actions 发布 workflow 只发布已经存在的 `v<semver>` tag。它会校验 tag 版本与 `package.json` 一致，运行 `pnpm check`，并将稳定版本发布到 npm 的 `latest` dist-tag。预发布版本使用第一个预发布标识作为 dist-tag，因此 `v0.1.0-alpha.0` 会将 `0.1.0-alpha.0` 发布到 `alpha`。
+
+要发布 `0.1.0` 的第一个 alpha，先更新包版本，再提交并推送提交和 tag：
+
+```sh
+npm version 0.1.0-alpha.0 --no-git-tag-version
+git add package.json
+git commit -m "Release v0.1.0-alpha.0"
+git tag v0.1.0-alpha.0
+git push origin master v0.1.0-alpha.0
+```
+
+同一预发布线的后续 alpha 可以使用下一个明确版本，例如 `npm version 0.1.0-alpha.1 --no-git-tag-version`。workflow 也支持手动运行，但必须提供一个已经存在的 release tag；不要重复使用已经发布的 npm 版本或 tag。
+
 ## 改动要求
 
 - 为行为改动增加或更新测试。
