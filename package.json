@@ -106,7 +106,7 @@
     "@deepseek-ai/cordis": ">=4.0.1 <5"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "4.0.2",
     "@types/node": "^22.20.0",
     "@vitest/coverage-v8": "^4.1.8",
     "knip": "^6.16.1",
