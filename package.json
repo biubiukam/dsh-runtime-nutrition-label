@@ -107,7 +107,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
-    "@types/node": "^22.20.0",
+    "@types/node": "^26.5.1",
     "@vitest/coverage-v8": "^4.1.8",
     "knip": "^6.16.1",
     "oxlint": "1.76.0",
