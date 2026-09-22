@@ -111,7 +111,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "knip": "^6.16.1",
     "oxlint": "1.76.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxlint-tsgolint": "7.0.2002",
     "publint": "^0.3.21",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
